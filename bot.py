@@ -45,7 +45,7 @@ class ClientHandler(threading.Thread):
         self.irc_port = self.config.irc_port
         self.irc_channel = self.config.irc_channel
         self.irc_nick = self.config.irc_nick
-        self.welcome_file = self.config.welcome_file
+        self.welcome_message = self.config.welcome_message
 
         self.client_socket = client_socket
         self.bot_nick = None
@@ -91,31 +91,19 @@ class ClientHandler(threading.Thread):
                 break
             self.bot_instance.connection.privmsg(self.irc_nick, message)
 
+
     def handle_private_message(self, event):
         sender = event.source.nick
         if sender == self.irc_nick and self.bot_nick:
             message = f"{self.your_call}> {event.arguments[0]}\n"
             self.client_socket.send(message.encode())
 
+
     def handle_welcome_message(self):
 
-        filename = self.welcome_file
+        for line in self.welcome_message
+            connection.send(line.encode())
 
-        if  os.path.isfile(filename):
-            with open(filename, 'r') as f:
-                for line in f:
-                    connection.send(line.encode())
-        else:
-            # Use a default if the welcome message file doesnt exist
-            self.client_socket.send('\n'.encode())
-            self.client_socket.send(f'        *** Welcome to the {self.your_call}s Chat Server ***          \n'.encode())
-            self.client_socket.send('\n'.encode())
-            self.client_socket.send(f'It allows you to exchange messages with {self.your_call}\n'.encode())
-            self.client_socket.send('Note: it doesnt relay messages to other stations like a group chat\n'.encode())
-            self.client_socket.send('\n'.encode())
-            self.client_socket.send('Type /quit at anytime to exit\n'.encode())
-        
-        self.client_socket.send('\n'.encode())
 
     def handle_nickname(self):
 
