@@ -4,6 +4,7 @@ import irc.bot
 import logging
 import os
 import argparse
+import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(threadName)s: %(message)s')
 
@@ -70,6 +71,11 @@ class ClientHandler(threading.Thread):
         self.bot_instance.private_message_handlers.append(
             lambda event: self.handle_private_message(event)
         )
+
+        # TODO: Maybe we should loop here until the bot is connected
+        time.sleep(0.1)
+
+        self.bot_instance.connection.privmsg(self.irc_nick, f'BOT> {self.bot_nick} has connected. Say hello.')
 
         while True:
             # TODO: Catch not being able to decode this
