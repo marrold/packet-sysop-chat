@@ -23,7 +23,8 @@ class IRCBot(irc.bot.SingleServerIRCBot):
 
     def stop(self, msg):
         logging.debug(f"{msg}, killing IRC Connection")
-        self.connection.disconnect(msg)
+        self.connection.quit(msg)
+        #self.connection.disconnect(msg)
         self._active = False
 
     def on_welcome(self, connection, event):
@@ -62,7 +63,7 @@ class ClientHandler(threading.Thread):
         logging.info(f'New client with nickname "{self.bot_nick}" connected')
         self.client_socket.send('\n'.encode())
 
-        self.bot_instance = IRCBot(f'self.irc_channel', self.bot_nick, self.irc_hostname, self.irc_port)
+        self.bot_instance = IRCBot(f'#{self.irc_channel}', self.bot_nick, self.irc_hostname, self.irc_port)
         bot_thread = threading.Thread(target=self.bot_instance.start)
         bot_thread.start()
 
