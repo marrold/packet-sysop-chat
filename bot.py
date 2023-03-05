@@ -24,7 +24,6 @@ class IRCBot(irc.bot.SingleServerIRCBot):
     def stop(self, msg):
         logging.info(f"{msg}, killing IRC Connection")
         self.connection.quit(msg)
-        #self.connection.disconnect(msg)
         self._active = False
 
     def on_welcome(self, connection, event):
@@ -151,26 +150,25 @@ def get_welcome(config):
         logging.info(f"{config.welcome_file} doesn't exist, using generic welcome message")
         config.welcome_message = """\
 
-                *** Welcome to the {config.your_call}s Chat Server ***          
+     *** Welcome to the {config.your_call}s Chat Server ***          
 
-        It allows you to exchange messages with {config.your_call}
-        Note: it doesnt relay messages to other stations like a group chat
+It allows you to exchange messages with {config.your_call}
+Note: it doesnt relay messages to other stations like a group chat
 
-        Type /quit at anytime to exit
+Type /quit at anytime to exit
 
-        """
+"""
 
 def get_config():
-
     # Create argument parser
     parser = argparse.ArgumentParser(description='packet-sysop-chat')
 
     # Add arguments
-    parser.add_argument('--listen_ip', help='IP to listen on for TCP clients. Defaults to 127.0.0.1', default="127.0.0.1")
+    parser.add_argument('--listen_ip', help='IP to listen on for TCP clients. Defaults to 127.0.0.1', default='127.0.0.1')
     parser.add_argument('--listen_port', help='Port to listen on for TCP clients. Defaults to 8888', default=8888)
-    parser.add_argument('--your_call', help='Your call sign. Defaults to SYSOP', default="SYSOP")
+    parser.add_argument('--your_call', help='Your call sign. Defaults to SYSOP', default='SYSOP')
     parser.add_argument('--irc_hostname', help='The IRC server hostname. (Required)')
-    parser.add_argument('--irc_port', help='The IRC server port. Defaults to 6667', default=6667)
+    parser.add_argument('--irc_port', help='The IRC server port. Defaults to 6667')
     parser.add_argument('--irc_channel', help='The IRC Channel bots should join. (Required)')
     parser.add_argument('--irc_nick', help='The IRC Nick bots should send messages to. (Required)')
     parser.add_argument('--welcome_file', help='A file containing text to welcome new users. Defaults to welcome.txt', default='welcome.txt')
@@ -178,17 +176,23 @@ def get_config():
     # Parse arguments
     args = parser.parse_args()
 
-    # TODO: I think is broked if we use a default in argparser, and supply an envvar
-
-    # Check if environment variables are set for arguments
-    args.listen_ip = args.listen_ip or os.environ.get('LISTEN_IP', '127.0.0.1')
-    args.listen_port = int(args.listen_port or os.environ.get('LISTEN_PORT', 8888))
-    args.your_call = args.your_call or os.environ.get('YOUR_CALL', 'SYSOP')
-    args.irc_hostname = args.irc_hostname or os.environ.get('IRC_HOSTNAME')
-    args.irc_port = int(args.irc_port or os.environ.get('IRC_PORT'))
-    args.irc_channel = args.irc_channel or os.environ.get('IRC_CHANNEL')
-    args.irc_nick = args.irc_nick or os.environ.get('IRC_NICK')
-    args.welcome_file = args.welcome_file or os.environ.get('WELCOME_FILE')
+    # Override arguments with environment variables if set
+    if os.environ.get('LISTEN_IP'):
+        args.listen_ip = os.environ['LISTEN_IP']
+    if os.environ.get('LISTEN_PORT'):
+        args.listen_port = int(os.environ['LISTEN_PORT'])
+    if os.environ.get('YOUR_CALL'):
+        args.your_call = os.environ['YOUR_CALL']
+    if os.environ.get('IRC_HOSTNAME'):
+        args.irc_hostname = os.environ['IRC_HOSTNAME']
+    if os.environ.get('IRC_PORT'):
+        args.irc_port = int(os.environ['IRC_PORT'])
+    if os.environ.get('IRC_CHANNEL'):
+        args.irc_channel = os.environ['IRC_CHANNEL']
+    if os.environ.get('IRC_NICK'):
+        args.irc_nick = os.environ['IRC_NICK']
+    if os.environ.get('WELCOME_FILE'):
+        args.welcome_file = os.environ['WELCOME_FILE']
 
     # Check if required arguments are provided
     if not all(vars(args).values()):
