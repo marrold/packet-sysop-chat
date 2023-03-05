@@ -8,7 +8,6 @@ import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(threadName)s: %(message)s')
 
-
 class IRCBot(irc.bot.SingleServerIRCBot):
     def __init__(self, channel, nickname, server, port):
         irc.bot.SingleServerIRCBot.__init__(self, [(server, int(port))], nickname, nickname)
@@ -38,7 +37,7 @@ class IRCBot(irc.bot.SingleServerIRCBot):
 class ClientHandler(threading.Thread):
     def __init__(self, config, client_socket, server_socket):
         threading.Thread.__init__(self)
-        
+
         self.config = config
         self.your_call = self.config.your_call
         self.irc_hostname = self.config.irc_hostname
@@ -60,8 +59,8 @@ class ClientHandler(threading.Thread):
         if self.bot_nick is None:
             return
 
-        self.client_socket.send(f'Welcome {self.bot_nick}. Please begin chatting.\n'.encode())
-    
+        self.client_socket.send(f'Welcome {self.bot_nick}. Enter your message to begin chatting.\n'.encode())
+
         logging.info(f'New client with nickname "{self.bot_nick}" connected')
 
         self.bot_instance = IRCBot(f'#{self.irc_channel}', self.bot_nick, self.irc_hostname, self.irc_port)
@@ -72,19 +71,31 @@ class ClientHandler(threading.Thread):
             lambda event: self.handle_private_message(event)
         )
 
-        # TODO: Maybe we should loop here until the bot is connected
-        time.sleep(0.1)
+        logging.info(f'Attempting to connect to IRC server')
+        irc_attempts = 0
+        while not self.bot_instance.connection.is_connected():
+            time.sleep(1)
+            irc_attempts = irc_attempts + 1
+            if irc_attempts > 60:
+                logging.info(f'Unable to connect to IRC server')
+                self.client_socket.send(f'Unable to connect to IRC server. Giving up.\n'.encode())
+                self.client_socket.close()
+                return
 
         self.bot_instance.connection.privmsg(self.irc_nick, f'BOT> {self.bot_nick} has connected. Say hello.')
 
         while True:
-            # TODO: Catch not being able to decode this
-            message = self.client_socket.recv(1024).decode().strip()
-            if not message:
-                # Client closed connection, disconnect IRC bot
-                self.bot_instance.stop(f"{self.bot_nick} has disconnected")
+
+            recv_bytes = self.recv_socket()
+            if recv_bytes is None:
                 break
-            elif message.lower() == '/quit':
+
+            try:
+                message = self.decode_bytes(recv_bytes)
+            except (UnicodeDecodeError, AttributeError) as e:
+                message = "Unable to decode message"
+
+            if message.lower() == '/quit':
                 # Client wants to close connection, disconnect IRC bot
                 self.bot_instance.stop(f"{self.bot_nick} has quit")
                 self.client_socket.close()
@@ -101,29 +112,55 @@ class ClientHandler(threading.Thread):
 
     def handle_welcome_message(self):
 
-        for line in self.welcome_message
-            connection.send(line.encode())
+        for line in self.welcome_message:
+            self.client_socket.send(line.encode())
 
 
     def handle_nickname(self):
 
         nickname = None
 
+        logging.info("Prompting new client for nickname")
         self.client_socket.send('Enter a nickname (Up to 9 characters): '.encode())
 
         attempts = 0
-        while attempts < 3:
-            nickname = self.client_socket.recv(1024).decode().strip()
+        while attempts < 5:
+
+            recv_bytes = self.recv_socket()
+            if recv_bytes is None:
+                return None
+
+            try:
+                nickname = self.decode_bytes(recv_bytes)
+            except (UnicodeDecodeError, AttributeError) as e:
+                logging.info("Error decoding nickname. Prompting client to try again.")
+                self.client_socket.send('Error: Unable to decode. Try again: \n'.encode())
+                attempts += 1
+                continue
+
             if len(nickname) > 9 or ' ' in nickname or nickname == "":
+                logging.info("Nickname failed validation. Prompting client to try again.")
                 self.client_socket.send('Error: nickname must be 9 characters or less and cannot contain whitespace. Try again: \n'.encode())
                 attempts += 1
                 continue
             else:
+                logging.info(f"Client has entered {nickname}. Prompting if this is correct." )
                 self.client_socket.send(f"Is '{nickname}' your correct nickname? [y/n]\n".encode())
-                confirmation = self.client_socket.recv(1024).decode().strip()
+
+                recv_bytes = self.recv_socket()
+                if recv_bytes is None:
+                    return None
+
+                try:
+                    confirmation = self.decode_bytes(recv_bytes)
+                except (UnicodeDecodeError, AttributeError) as e:
+                    confirmation = 'n'
+
                 if confirmation.lower() == 'y':
+                    logging.info("Client accepted nickname: {nickname}")
                     return nickname
                 else:
+                    logging.info("Client didn't accept nickname. Prompting to try again.")
                     self.client_socket.send('Try again: \n'.encode())
                     attempts += 1
                     continue
@@ -132,6 +169,38 @@ class ClientHandler(threading.Thread):
             self.client_socket.close()
             return None
 
+
+    def decode_bytes(self, data):
+        try:
+            decoded_data = data.decode('utf-8', errors='ignore').strip()
+            # Replace non-printable characters with '?'
+            decoded_data = ''.join(c if c.isprintable() else '?' for c in decoded_data)
+            logging.info(f"Decoded: {decoded_data}")
+            return decoded_data
+        except (UnicodeDecodeError, AttributeError) as e:
+            # Handle decoding errors or attribute errors
+            logging.info(f"Error decoding message: {e}")
+            raise
+
+
+    def recv_socket(self):
+
+        recv_bytes = self.client_socket.recv(1024)
+        logging.info(f"recv bytes is {recv_bytes}")
+
+        if recv_bytes == b'' or recv_bytes == b'\xff\xf4\xff\xfd\x06' or recv_bytes == b'\xff\xed\xff\xfd\x06':
+            logging.info("Client disconnected, exiting")
+            try:
+                self.client_socket.close()
+            except Exception:
+                pass
+
+            if self.bot_instance is not None:
+                self.bot_instance.stop(f"{self.bot_nick} has disconnected")
+
+            return None
+        else:
+            return recv_bytes
 
 def get_welcome(config):
 
@@ -144,7 +213,7 @@ def get_welcome(config):
         logging.info(f"{config.welcome_file} doesn't exist, using generic welcome message")
         config.welcome_message = """\
 
-     *** Welcome to the {config.your_call}s Chat Server ***          
+     *** Welcome to the {config.your_call}s Chat Server ***
 
 It allows you to exchange messages with {config.your_call}
 Note: it doesnt relay messages to other stations like a group chat
@@ -202,7 +271,7 @@ if __name__ == '__main__':
     config = get_config()
 
     get_welcome(config)
-    
+
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((config.listen_ip, config.listen_port))
