@@ -1,0 +1,13 @@
+---
+version: "3"
+services:
+  packet-sysop-chat:
+    image: marrold/packet-sysop-chat
+    container_name: packet-sysop-chat
+    network_mode: "host"
+    restart: unless-stopped
+    environment:
+      - IRC_HOSTNAME=127.0.0.1
+      - IRC_PORT=6667
+      - IRC_CHANNEL=packet-sysop-chat
+      - IRC_NICK=sysop
