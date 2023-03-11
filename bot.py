@@ -23,7 +23,10 @@ class IRCBot(irc.bot.SingleServerIRCBot):
 
     def stop(self, msg):
         logging.info(f"{msg}, killing IRC Connection")
-        self.connection.quit(msg)
+        try:
+            self.connection.quit(msg)
+        except irc.client.ServerNotConnectedError:
+            logging.info(f"IRC server is not connected, unable to kill IRC Connection")
         self._active = False
 
     def on_welcome(self, connection, event):
@@ -59,10 +62,6 @@ class ClientHandler(threading.Thread):
         if self.bot_nick is None:
             return
 
-        self.client_socket.send(f'Welcome {self.bot_nick}. Enter your message to begin chatting.\n'.encode())
-
-        logging.info(f'New client with nickname "{self.bot_nick}" connected')
-
         self.bot_instance = IRCBot(f'#{self.irc_channel}', self.bot_nick, self.irc_hostname, self.irc_port)
         bot_thread = threading.Thread(target=self.bot_instance.start)
         bot_thread.start()
@@ -72,17 +71,22 @@ class ClientHandler(threading.Thread):
         )
 
         logging.info(f'Attempting to connect to IRC server')
+        self.client_socket.send(f'Connecting to chat server\n'.encode())
         irc_attempts = 0
         while not self.bot_instance.connection.is_connected():
             time.sleep(1)
             irc_attempts = irc_attempts + 1
-            if irc_attempts > 60:
+            if irc_attempts > 10:
                 logging.info(f'Unable to connect to IRC server')
                 self.client_socket.send(f'Unable to connect to IRC server. Giving up.\n'.encode())
                 self.client_socket.close()
                 return
 
-        self.bot_instance.connection.privmsg(self.irc_nick, f'BOT> {self.bot_nick} has connected. Say hello.')
+        self.client_socket.send(f'Welcome {self.bot_nick}. Enter your message to begin chatting.\n'.encode())
+
+        logging.info(f'New client with nickname "{self.bot_nick}" connected')
+
+        self.send_irc(self.irc_nick, f'BOT> {self.bot_nick} has connected. Say hello.')
 
         while True:
 
@@ -100,7 +104,7 @@ class ClientHandler(threading.Thread):
                 self.bot_instance.stop(f"{self.bot_nick} has quit")
                 self.client_socket.close()
                 break
-            self.bot_instance.connection.privmsg(self.irc_nick, message)
+            self.send_irc(self.irc_nick, message)
 
 
     def handle_private_message(self, event):
@@ -175,7 +179,6 @@ class ClientHandler(threading.Thread):
             decoded_data = data.decode('utf-8', errors='ignore').strip()
             # Replace non-printable characters with '?'
             decoded_data = ''.join(c if c.isprintable() else '?' for c in decoded_data)
-            logging.info(f"Decoded: {decoded_data}")
             return decoded_data
         except (UnicodeDecodeError, AttributeError) as e:
             # Handle decoding errors or attribute errors
@@ -186,7 +189,6 @@ class ClientHandler(threading.Thread):
     def recv_socket(self):
 
         recv_bytes = self.client_socket.recv(1024)
-        logging.info(f"recv bytes is {recv_bytes}")
 
         if recv_bytes == b'' or recv_bytes == b'\xff\xf4\xff\xfd\x06' or recv_bytes == b'\xff\xed\xff\xfd\x06':
             logging.info("Client disconnected, exiting")
@@ -201,6 +203,18 @@ class ClientHandler(threading.Thread):
             return None
         else:
             return recv_bytes
+
+    def send_irc(self, nick, msg):
+
+        try:
+            self.bot_instance.connection.privmsg(nick, msg)
+        except irc.client.ServerNotConnectedError:
+            self.client_socket.send('The chat server has disconnected. Try again later or /quit\n'.encode())
+            logging.info("IRC server isn't connected. Can't forward message.")
+        except Exception:
+            self.client_socket.send('Something went wrong. Try again later or /quit\n'.encode())
+            logging.info("IRC server isn't connected. Can't forward message.")
+
 
 def get_welcome(config):
 
