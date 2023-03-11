@@ -1,0 +1,1 @@
+docker buildx build -t "marrold/packet-sysop-chat:latest" --platform linux/amd64,linux/arm/v7 --push .
