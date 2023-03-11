@@ -225,7 +225,7 @@ def get_welcome(config):
             config.welcome_message = f.read()
     else:
         logging.info(f"{config.welcome_file} doesn't exist, using generic welcome message")
-        config.welcome_message = """\
+        config.welcome_message = f"""\
 
      *** Welcome to the {config.your_call}s Chat Server ***
 
