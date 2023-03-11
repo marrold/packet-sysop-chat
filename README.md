@@ -3,7 +3,7 @@
 
 This is a simple chat server that allows packet radio users to chat to the "SYSOP" of a node. Its a 1:1 direct chat rather than a group chat, so messages aren't relayed between third parties which might be considered a breach of the UK amateur radio license. 
 
-[Github Repo](https://github.com/marrold/packet-sysop-chat)
+[Github Repo](https://github.com/marrold/packet-sysop-chat)  
 [Docker Hub](https://hub.docker.com/repository/docker/marrold/packet-sysop-chat/general)
 
 ## Overview
